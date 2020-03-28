@@ -1,78 +1,309 @@
 use crate::block::Block;
 use crate::block::BlockType;
 use crate::block::MoveDir;
+use crate::config;
+use crate::input::Input;
 use crate::map::Map;
 use crate::place::Coord;
-use crate::place::Place;
-use crate::config;
+use crate::rotate;
 
-use rand::{
-    distributions::{Distribution, Standard},
-    Rng,
-};
-use tetra::graphics::{self, Color};
+use rand::Rng;
+use sfml::graphics::{Color, RenderWindow};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
+use std::time::{Duration, Instant};
 
 enum CollisionEffect {
-    stop,
-    dont_move,
-    none,
+    Stop,
+    DontMove,
+    None,
 }
 
-struct Game {
+enum Action {
+    Fall,
+    FallFast,
+    MoveLeft,
+    MoveRight,
+    Rotate,
+}
+
+pub struct Game {
     map: Map,
     blocks: Vec<Block>,
     moving_block_id: Option<usize>,
-    next_block_id: i32,
+    next_block_id: usize,
 }
 
 impl Game {
-    pub fn new() -> Game {
+    pub fn new(win: RenderWindow) -> Game {
         Game {
-            map: Map::new(),
+            map: Map::new(win),
             blocks: vec![],
             moving_block_id: None,
             next_block_id: 0,
         }
     }
 
-    pub fn move_block(&self, dir: MoveDir) {
+    pub fn game_loop(&mut self) {
+        let mut input_received: Option<char>;
+
+        let (input_tx, input_rx): (Sender<Option<char>>, Receiver<Option<char>>) = mpsc::channel();
+        let (game_off_tx, game_off_rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
+        let (input_read_tx, input_read_rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
+
+        let mut input_system = Input::new();
+        let input_thread = thread::spawn(move || {
+            input_system.input_listener_activate(input_tx, input_read_rx, game_off_rx)
+        });
+
+        input_read_tx.send(true).unwrap();
+
+        let mut time_counter = Instant::now();
+        let fall_down_time = Duration::from_millis(500);
+
+        'game_loop: loop {
+            input_received = match input_rx.try_recv() {
+                Ok(inp) => {
+                    input_read_tx.send(false).unwrap();
+                    println!("received");
+                    Some(inp.unwrap())
+                }
+                _ => None,
+            };
+
+            match input_received {
+                Some(inp) => {
+                    if inp == '\n' {
+                        game_off_tx.send(true).unwrap();
+                        break 'game_loop;
+                    } else {
+                        self.tick(input_received);
+                        input_read_tx.send(true).unwrap();
+                    }
+                }
+                None => {
+                    self.tick(input_received);
+                    input_read_tx.send(true).unwrap();
+                }
+            }
+
+            if time_counter.elapsed().as_millis() >= fall_down_time.as_millis() {
+                self.fall_block_down();
+                time_counter = Instant::now();
+            }
+            self.check_allignments();
+        }
+
+        println!("GAME LOOP ENDED");
+
+        match input_thread.join() {
+            Ok(_) => {
+                println!("thread closed correctly");
+            }
+            Err(_) => {
+                println!("thread closing error");
+            }
+        };
+    }
+
+    fn tick(&mut self, input: Option<char>) {
+        if self.moving_block_id == None {
+            self.spawn_random_block();
+        }
+        let mut act = Action::Fall;
+        match input {
+            None => (),
+            Some(inp) => {
+                act = Game::input_to_action(&inp);
+            }
+        }
+
+        self.map.print_map();
+
+        if let Action::Fall = act {
+            ();
+        } else {
+            self.make_action(&act);
+            self.map.print_map();
+        }
+
+        thread::sleep(Duration::new(0, config::TURN_TIME_NS));
+    }
+
+    fn fall_block_down(&mut self) {
+        self.move_block(MoveDir::Down);
+        self.map.print_map();
+    }
+
+    fn input_to_action(act: &char) -> Action {
+        match act {
+            '4' => Action::MoveLeft,
+            '6' => Action::MoveRight,
+            '2' => Action::FallFast,
+            ' ' => Action::Rotate,
+            _ => Action::Fall,
+        }
+    }
+
+    fn make_action(&mut self, act: &Action) {
+        match act {
+            Action::MoveRight => self.move_block(MoveDir::Right),
+            Action::MoveLeft => self.move_block(MoveDir::Left),
+            Action::Fall => self.move_block(MoveDir::Down),
+            Action::Rotate => self.rotate_block(),
+            Action::FallFast => self.fall_fast(),
+        }
+    }
+
+    fn rotate_block(&mut self) {
         match self.moving_block_id {
-            None => unimplemented!(),
+            None => (),
+            Some(id) => {
+                let area_coord = self.blocks[id].get_block_min_xy();
+                let area = self
+                    .map
+                    .get_3x3_clone(area_coord.x as usize, area_coord.y as usize);
+                let rotation_coords = rotate::rotate_block(area, id);
+                match self.check_overbounding(&rotation_coords, id) {
+                    CollisionEffect::None => {
+                        println!("obrot",);
+                        self.blocks[id].print_coords();
+                        self.unplace_block_from_map(id);
+                        self.blocks[id].set_block_coords(rotation_coords);
+                        self.place_block_on_map(id);
+                        self.blocks[id].print_coords();
+                    }
+                    _ => {
+                        println!("kolizja",);
+                    } // do nothing (don't rotate)
+                }
+            }
+        }
+    }
+
+    fn fall_fast(&mut self) {
+        'fall_loop: loop {
+            match self.moving_block_id {
+                None => (),
+                Some(id) => {
+                    let move_try = self.blocks[id].try_move(&MoveDir::Down);
+                    match self.check_overbounding(&move_try, id) {
+                        CollisionEffect::Stop => {
+                            self.moving_block_id = None;
+                            break 'fall_loop;
+                        }
+                        _ => {
+                            self.move_block(MoveDir::Down);
+                        }
+                    }
+                }
+            }
+        }
+        thread::sleep(Duration::new(0, config::TURN_TIME_NS * 5));
+    }
+
+    fn move_block(&mut self, dir: MoveDir) {
+        match self.moving_block_id {
+            None => (),
             Some(id) => {
                 let move_try = self.blocks[id].try_move(&dir);
+                match self.check_overbounding(&move_try, id) {
+                    CollisionEffect::Stop => {
+                        println!("Stop");
+                        self.moving_block_id = None
+                    }
+                    CollisionEffect::DontMove => {
+                        ();
+                    }
+                    CollisionEffect::None => {
+                        // println!("spadaj");  // MDELETE
+                        self.unplace_block_from_map(id);
+                        self.blocks[id].set_block_coords(move_try);
+                        self.place_block_on_map(id);
+                    }
+                }
             }
         }
     }
 
-    pub fn check_overbounding(&self, coords: &[Coord; 4]) -> CollisionEffect {
+    fn check_overbounding(&self, coords: &[Coord; 4], block_id: usize) -> CollisionEffect {
         for coord in coords {
-            if self.map.field[coord.x as usize][coord.y as usize].block_id != None {
-                return CollisionEffect::stop;
+            match self.map.field[coord.x as usize][coord.y as usize].get_block_id() {
+                None => (),
+                Some(id) => {
+                    if id == block_id {
+                        ();
+                    } else {
+                        return CollisionEffect::Stop;
+                    }
+                }
             }
         }
 
-        CollisionEffect::none
+        for coord in coords {
+            if coord.y as usize == config::MAP_HEIGHT - 1 {
+                return CollisionEffect::Stop;
+            }
+            if coord.x as usize == config::MAP_LENGTH - 1 {
+                return CollisionEffect::DontMove;
+            }
+        }
+        CollisionEffect::None
     }
 
-    pub fn spawn_random_block(&mut self) {
+    fn check_allignments(&mut self) {
+        let allignments = self.map.get_block_allignments_y();
+        match allignments {
+            None => (),
+            Some(vec) => {
+                for y in vec {
+                    self.map.delete_row(y as i32);
+                }
+            }
+        }
+    }
+
+    fn spawn_random_block(&mut self) {
         let block_type: BlockType = rand::random();
-        let start_x: i8 = rand::thread_rng().gen_range(0, (config::MAP_LENGTH-4) as i8);
+        let start_x: i32 = rand::thread_rng().gen_range(0, (config::MAP_LENGTH - 4) as i32);
         let color = Game::random_color();
 
-        let new_block = Block::new(self.next_block_id, color, block_type, start_x);
-
+        let new_block = Block::new(color, block_type, start_x);
+        self.blocks.push(new_block);
+        self.place_block_on_map(self.next_block_id);
+        self.moving_block_id = Some(self.next_block_id as usize);
         self.next_block_id += 1;
     }
 
-    fn random_color() -> tetra::graphics::Color {
-        let col_num = rand::thread_rng().gen_range(0, 4);
-        match col_num {
-            0 => tetra::graphics::Color::RED,
-            1 => tetra::graphics::Color::GREEN,
-            2 => tetra::graphics::Color::BLUE,
-            // >= 3
-            _ => tetra::graphics::Color::WHITE,
+    fn unplace_block_from_map(&mut self, block_index: usize) {
+        let block = &self.blocks[block_index];
+        for coord in block.get_blocks_coords().iter() {
+            self.map.unset_block(coord.x as usize, coord.y as usize);
         }
     }
 
+    fn place_block_on_map(&mut self, block_index: usize) {
+        let block = &self.blocks[block_index];
+        for coord in block.get_blocks_coords().iter() {
+            self.map.set_block(
+                coord.x as usize,
+                coord.y as usize,
+                block_index,
+                self.blocks[block_index as usize].get_color(),
+            );
+        }
+    }
+
+    fn random_color() -> Color {
+        let col_num = rand::thread_rng().gen_range(0, 6);
+        match col_num {
+            0 => Color::RED,
+            1 => Color::CYAN,
+            2 => Color::RED,
+            3 => Color::GREEN,
+            4 => Color::MAGENTA,
+            5 => Color::BLUE,
+            _ => Color::WHITE,
+        }
+    }
 }

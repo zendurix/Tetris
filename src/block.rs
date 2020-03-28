@@ -5,6 +5,7 @@ use rand::{
     distributions::{Distribution, Standard},
     Rng,
 };
+use sfml::graphics::Color;
 
 pub enum BlockType {
     // block are tetronimos. names are taken from https://tetris.wiki/Tetromino
@@ -33,7 +34,7 @@ pub enum BlockType {
 impl Distribution<BlockType> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> BlockType {
         match rng.gen_range(0, 7) {
-            0 => BlockType::I,
+            //0 => BlockType::I,
             1 => BlockType::O,
             2 => BlockType::T,
             3 => BlockType::S,
@@ -45,82 +46,104 @@ impl Distribution<BlockType> for Standard {
     }
 }
 
-
-
 pub enum MoveDir {
-    down,
-    left,
-    right,
+    Down,
+    Left,
+    Right,
 }
 
+/*  MDELETE
 // derive for comparison
 #[derive(PartialEq, Eq)]
 pub enum RotateState {
-    up = 1,
-    right = 2,
-    down = 3,
-    left = 4,
+    Up = 1,
+    Right = 2,
+    Down = 3,
+    Left = 4,
 }
 
+*/
+
 pub struct Block {
-    blocks: [Coord; 4], // positions for 4 blocks within Block
-    color: tetra::graphics::Color,     //RGB color
-    is_moving: bool,
+    squares: [Coord; 4], // positions for 4 blocks within Block
+    color: Color,        //RGB color
     block_type: BlockType,
-    rotate_state: RotateState,
-    id: i32,
 }
 
 // construction
 impl Block {
-    pub fn new(id: i32, color: tetra::graphics::Color, block_type: BlockType, start_x: i8) -> Block {
+    pub fn new(color: Color, block_type: BlockType, start_x: i32) -> Block {
         assert!(
             (start_x as usize) < config::MAP_LENGTH - 4,
             "Block spawned out of bounds"
         );
 
         Block {
-            blocks: Block::make_blocks_coords(&block_type, start_x),
-            rotate_state: RotateState::right,
-            is_moving: true,
+            squares: Block::make_squares_coords(&block_type, start_x),
             block_type,
             color,
-            id,
         }
     }
 
     pub fn try_move(&self, dir: &MoveDir) -> [Coord; 4] {
         let mut coords = [
-            Coord { x: -1, y: -1 },
-            Coord { x: -1, y: -1 },
-            Coord { x: -1, y: -1 },
-            Coord { x: -1, y: -1 },
+            Coord::new(0, 0),
+            Coord::new(0, 0),
+            Coord::new(0, 0),
+            Coord::new(0, 0),
         ];
-        let transform: Coord = match dir {
-            MoveDir::down => Coord { x: 0, y: 1 },
-            MoveDir::right => Coord { x: 1, y: 0 },
-            MoveDir::left => Coord { x: -1, y: 0 },
+        let transform: (i32, i32) = match dir {
+            MoveDir::Down => (0, 1),
+            MoveDir::Right => (1, 0),
+            MoveDir::Left => (-1, 0),
         };
+
+        let mut dont_move_left = false;
+
+        for square in self.squares.iter() {
+            if square.x == 0 {
+                dont_move_left = true;
+            }
+        }
+
         for (i, coord) in coords.iter_mut().enumerate() {
-            coord.x = self.blocks[i].x + transform.x;
-            coord.y = self.blocks[i].y + transform.y;
+            if dont_move_left && transform.0 == -1 {
+                coord.x = self.squares[i].x;
+            } else {
+                coord.x = self.squares[i].x + transform.0;
+            }
+            coord.y = self.squares[i].y + transform.1;
         }
         coords
     }
 
-    fn make_blocks_coords(block_type: &BlockType, start_x: i8) -> [Coord; 4] {
+    pub fn get_block_min_xy(&self) -> Coord {
+        let mut min_x = 100;
+        let mut min_y = 100;
+        for squares in self.squares.iter() {
+            if squares.x < min_x {
+                min_x = squares.x;
+            }
+            if squares.y < min_y {
+                min_y = squares.y;
+            }
+        }
+        Coord::new(min_x, min_y)
+    }
+
+    fn make_squares_coords(block_type: &BlockType, start_x: i32) -> [Coord; 4] {
         match block_type {
-            BlockType::I => Block::make_blocks_coords_I(start_x),
-            BlockType::O => Block::make_blocks_coords_O(start_x),
-            BlockType::T => Block::make_blocks_coords_T(start_x),
-            BlockType::S => Block::make_blocks_coords_S(start_x),
-            BlockType::Z => Block::make_blocks_coords_Z(start_x),
-            BlockType::J => Block::make_blocks_coords_J(start_x),
-            BlockType::L => Block::make_blocks_coords_L(start_x),
+            BlockType::I => Block::make_square_coords_i(start_x),
+            BlockType::O => Block::make_square_coords_o(start_x),
+            BlockType::T => Block::make_square_coords_t(start_x),
+            BlockType::S => Block::make_square_coords_s(start_x),
+            BlockType::Z => Block::make_square_coords_z(start_x),
+            BlockType::J => Block::make_square_coords_j(start_x),
+            BlockType::L => Block::make_square_coords_l(start_x),
         }
     }
 
-    fn make_blocks_coords_I(start_x: i8) -> [Coord; 4] {
+    fn make_square_coords_i(start_x: i32) -> [Coord; 4] {
         [
             Coord { x: start_x, y: 0 },
             Coord {
@@ -138,7 +161,7 @@ impl Block {
         ]
     }
 
-    fn make_blocks_coords_O(start_x: i8) -> [Coord; 4] {
+    fn make_square_coords_o(start_x: i32) -> [Coord; 4] {
         [
             Coord { x: start_x, y: 0 },
             Coord {
@@ -153,7 +176,7 @@ impl Block {
         ]
     }
 
-    fn make_blocks_coords_T(start_x: i8) -> [Coord; 4] {
+    fn make_square_coords_t(start_x: i32) -> [Coord; 4] {
         [
             Coord {
                 x: start_x + 1,
@@ -171,7 +194,7 @@ impl Block {
         ]
     }
 
-    fn make_blocks_coords_S(start_x: i8) -> [Coord; 4] {
+    fn make_square_coords_s(start_x: i32) -> [Coord; 4] {
         [
             Coord {
                 x: start_x + 1,
@@ -189,7 +212,7 @@ impl Block {
         ]
     }
 
-    fn make_blocks_coords_Z(start_x: i8) -> [Coord; 4] {
+    fn make_square_coords_z(start_x: i32) -> [Coord; 4] {
         [
             Coord { x: start_x, y: 0 },
             Coord {
@@ -207,7 +230,7 @@ impl Block {
         ]
     }
 
-    fn make_blocks_coords_J(start_x: i8) -> [Coord; 4] {
+    fn make_square_coords_j(start_x: i32) -> [Coord; 4] {
         [
             Coord { x: start_x, y: 0 },
             Coord { x: start_x, y: 1 },
@@ -222,7 +245,7 @@ impl Block {
         ]
     }
 
-    fn make_blocks_coords_L(start_x: i8) -> [Coord; 4] {
+    fn make_square_coords_l(start_x: i32) -> [Coord; 4] {
         [
             Coord {
                 x: start_x + 2,
@@ -238,6 +261,13 @@ impl Block {
                 y: 1,
             },
         ]
+    }
+
+    pub fn print_coords(&self) {
+        for (i, square) in self.squares.iter().enumerate() {
+            print!(" N{} x{} y{} ", i, square.x, square.y);
+        }
+        println!("",);
     }
 }
 
@@ -265,3 +295,18 @@ impl Block {
         *blocks   // square can't rotate
     }
 */
+
+// setters / getters
+impl Block {
+    pub fn get_blocks_coords(&self) -> [Coord; 4] {
+        self.squares.clone()
+    }
+
+    pub fn set_block_coords(&mut self, coords: [Coord; 4]) {
+        self.squares = coords;
+    }
+
+    pub fn get_color(&self) -> Color {
+        self.color.clone()
+    }
+}

@@ -1,37 +1,33 @@
 mod block;
 mod config;
 mod game;
+mod input;
 mod map;
 mod place;
 mod rotate;
-use crate::place::Place;
 
+use crate::game::Game;
 extern crate rand;
+extern crate sfml;
 
-use tetra::graphics::{self, Color};
-use tetra::{Context, ContextBuilder, State};
-
-struct GameState;
-impl State for GameState {
-    fn draw(&mut self, ctx: &mut Context) -> tetra::Result {
-        // Cornflower blue, as is tradition
-        graphics::clear(ctx, Color::rgb(0.392, 0.584, 0.929));
-        Ok(())
-    }
-}
+use sfml::{
+    graphics::RenderWindow,
+    window::{ContextSettings, Style},
+};
 
 fn main() {
-    //-> tetra::Result {
+    let context_settings = ContextSettings {
+        antialiasing_level: 0,
+        ..Default::default()
+    };
+    let window = RenderWindow::new(
+        (config::WIN_LENGTH as u32, config::WIN_HEIGHT as u32),
+        "TETRIS",
+        Style::CLOSE,
+        &context_settings,
+    );
 
-    let arr = [
-        [Place::new(7, 4), Place::new(8, 4), Place::new(9, 4)],
-        [Place::new(7, 5), Place::new(8, 5), Place::new(9, 5)],
-        [Place::new(7, 6), Place::new(8, 6), Place::new(9, 6)],
-    ];
+    let mut game = Game::new(window);
 
-    rotate::rotate_block(&arr);
-
-    // ContextBuilder::new(" TETRIS ", config::WIN_LENGTH, config::WIN_HEIGHT)
-    //     .build()?
-    //    .run(|_| Ok(GameState))
+    game.game_loop();
 }
