@@ -7,6 +7,7 @@ use rand::{
 };
 use sfml::graphics::Color;
 
+#[derive(Clone, Copy)]
 pub enum BlockType {
     // block are tetronimos. names are taken from https://tetris.wiki/Tetromino
     I, // ####
@@ -41,7 +42,7 @@ impl Distribution<BlockType> for Standard {
             4 => BlockType::Z,
             5 => BlockType::J,
             6 => BlockType::L,
-            _ => BlockType::L, // this won't happen, cause all rng output is handled
+            _ => BlockType::O, // this won't happen, cause all rng output is handled
         }
     }
 }
@@ -70,7 +71,6 @@ pub struct Block {
     block_type: BlockType,
 }
 
-// construction
 impl Block {
     pub fn new(color: Color, block_type: BlockType, start_x: i32) -> Block {
         assert!(
@@ -120,14 +120,24 @@ impl Block {
     pub fn get_block_min_xy(&self) -> Coord {
         let mut min_x = 100;
         let mut min_y = 100;
-        for squares in self.squares.iter() {
-            if squares.x < min_x {
-                min_x = squares.x;
+        let mut squares_y: Vec<i32> = vec![];
+        for square in self.squares.iter() {
+            if !squares_y.contains(&square.y) {
+                squares_y.push(square.y);
             }
-            if squares.y < min_y {
-                min_y = squares.y;
+            if square.x < min_x {
+                min_x = square.x;
+            }
+            if square.y < min_y {
+                min_y = square.y;
             }
         }
+
+        if squares_y.len() < 3 && min_y != 0 {
+            min_y -= 1;
+            println!("aaa");
+        }
+
         Coord::new(min_x, min_y)
     }
 
@@ -262,13 +272,6 @@ impl Block {
             },
         ]
     }
-
-    pub fn print_coords(&self) {
-        for (i, square) in self.squares.iter().enumerate() {
-            print!(" N{} x{} y{} ", i, square.x, square.y);
-        }
-        println!("",);
-    }
 }
 
 /*
@@ -308,5 +311,9 @@ impl Block {
 
     pub fn get_color(&self) -> Color {
         self.color.clone()
+    }
+
+    pub fn get_block_type(&self) -> BlockType {
+        self.block_type
     }
 }

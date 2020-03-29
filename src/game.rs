@@ -32,6 +32,7 @@ pub struct Game {
     blocks: Vec<Block>,
     moving_block_id: Option<usize>,
     next_block_id: usize,
+    points: u32,
 }
 
 impl Game {
@@ -41,13 +42,12 @@ impl Game {
             blocks: vec![],
             moving_block_id: None,
             next_block_id: 0,
+            points: 0,
         }
     }
 
     pub fn game_loop(&mut self) {
-        let mut input_received: Option<char>;
-
-        let (input_tx, input_rx): (Sender<Option<char>>, Receiver<Option<char>>) = mpsc::channel();
+        let (input_tx, input_rx): (Sender<char>, Receiver<char>) = mpsc::channel();
         let (game_off_tx, game_off_rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
         let (input_read_tx, input_read_rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 
@@ -56,17 +56,22 @@ impl Game {
             input_system.input_listener_activate(input_tx, input_read_rx, game_off_rx)
         });
 
+        // send read(true) to input system, so it will start chcecking input
         input_read_tx.send(true).unwrap();
 
         let mut time_counter = Instant::now();
-        let fall_down_time = Duration::from_millis(500);
+        let fall_down_time = Duration::from_millis(config::FALL_TIME_MS);
+        let mut input_received: Option<char>;
 
         'game_loop: loop {
+            if self.moving_block_id == None {
+                self.spawn_random_block();
+            }
+
             input_received = match input_rx.try_recv() {
                 Ok(inp) => {
                     input_read_tx.send(false).unwrap();
-                    println!("received");
-                    Some(inp.unwrap())
+                    Some(inp)
                 }
                 _ => None,
             };
@@ -77,14 +82,11 @@ impl Game {
                         game_off_tx.send(true).unwrap();
                         break 'game_loop;
                     } else {
-                        self.tick(input_received);
+                        self.handle_input(input_received);
                         input_read_tx.send(true).unwrap();
                     }
                 }
-                None => {
-                    self.tick(input_received);
-                    input_read_tx.send(true).unwrap();
-                }
+                None => (),
             }
 
             if time_counter.elapsed().as_millis() >= fall_down_time.as_millis() {
@@ -95,7 +97,7 @@ impl Game {
         }
 
         println!("GAME LOOP ENDED");
-
+        println!("POINTS: {}", self.points);
         match input_thread.join() {
             Ok(_) => {
                 println!("thread closed correctly");
@@ -106,33 +108,16 @@ impl Game {
         };
     }
 
-    fn tick(&mut self, input: Option<char>) {
-        if self.moving_block_id == None {
-            self.spawn_random_block();
-        }
-        let mut act = Action::Fall;
+    fn handle_input(&mut self, input: Option<char>) {
         match input {
             None => (),
             Some(inp) => {
-                act = Game::input_to_action(&inp);
+                let act = Game::input_to_action(&inp);
+                self.make_action(&act);
+                self.map.print_map();
             }
         }
-
-        self.map.print_map();
-
-        if let Action::Fall = act {
-            ();
-        } else {
-            self.make_action(&act);
-            self.map.print_map();
-        }
-
         thread::sleep(Duration::new(0, config::TURN_TIME_NS));
-    }
-
-    fn fall_block_down(&mut self) {
-        self.move_block(MoveDir::Down);
-        self.map.print_map();
     }
 
     fn input_to_action(act: &char) -> Action {
@@ -155,27 +140,31 @@ impl Game {
         }
     }
 
+    fn fall_block_down(&mut self) {
+        self.move_block(MoveDir::Down);
+        self.map.print_map();
+    }
+
     fn rotate_block(&mut self) {
         match self.moving_block_id {
             None => (),
             Some(id) => {
-                let area_coord = self.blocks[id].get_block_min_xy();
-                let area = self
-                    .map
-                    .get_3x3_clone(area_coord.x as usize, area_coord.y as usize);
-                let rotation_coords = rotate::rotate_block(area, id);
-                match self.check_overbounding(&rotation_coords, id) {
-                    CollisionEffect::None => {
-                        println!("obrot",);
-                        self.blocks[id].print_coords();
-                        self.unplace_block_from_map(id);
-                        self.blocks[id].set_block_coords(rotation_coords);
-                        self.place_block_on_map(id);
-                        self.blocks[id].print_coords();
+                if let BlockType::O = self.blocks[id].get_block_type() {
+                    ();
+                } else {
+                    let area_coord = self.blocks[id].get_block_min_xy();
+                    let area = self
+                        .map
+                        .get_3x3_clone(area_coord.x as usize, area_coord.y as usize);
+                    let rotation_coords = rotate::rotate_block(area, id);
+                    match self.check_overbounding(&rotation_coords, id) {
+                        CollisionEffect::None => {
+                            self.unplace_block_from_map(id);
+                            self.blocks[id].set_block_coords(rotation_coords);
+                            self.place_block_on_map(id);
+                        }
+                        _ => (),
                     }
-                    _ => {
-                        println!("kolizja",);
-                    } // do nothing (don't rotate)
                 }
             }
         }
@@ -199,6 +188,7 @@ impl Game {
                 }
             }
         }
+        // wait for long time, so game wont drop down many blocks in row at the same time
         thread::sleep(Duration::new(0, config::TURN_TIME_NS * 5));
     }
 
@@ -208,19 +198,13 @@ impl Game {
             Some(id) => {
                 let move_try = self.blocks[id].try_move(&dir);
                 match self.check_overbounding(&move_try, id) {
-                    CollisionEffect::Stop => {
-                        println!("Stop");
-                        self.moving_block_id = None
-                    }
-                    CollisionEffect::DontMove => {
-                        ();
-                    }
+                    CollisionEffect::Stop => self.moving_block_id = None,
                     CollisionEffect::None => {
-                        // println!("spadaj");  // MDELETE
                         self.unplace_block_from_map(id);
                         self.blocks[id].set_block_coords(move_try);
                         self.place_block_on_map(id);
                     }
+                    CollisionEffect::DontMove => (),
                 }
             }
         }
@@ -248,16 +232,18 @@ impl Game {
                 return CollisionEffect::DontMove;
             }
         }
+
         CollisionEffect::None
     }
 
     fn check_allignments(&mut self) {
-        let allignments = self.map.get_block_allignments_y();
+        let allignments = self.map.get_block_allignments();
         match allignments {
             None => (),
             Some(vec) => {
                 for y in vec {
-                    self.map.delete_row(y as i32);
+                    self.map.shift_map_down(y as i32);
+                    self.points += 1;
                 }
             }
         }
@@ -303,7 +289,7 @@ impl Game {
             3 => Color::GREEN,
             4 => Color::MAGENTA,
             5 => Color::BLUE,
-            _ => Color::WHITE,
+            _ => Color::WHITE, // won't happen
         }
     }
 }

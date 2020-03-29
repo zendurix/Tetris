@@ -1,13 +1,10 @@
 use crate::config;
 use crate::place::Place;
 
-use sfml::{
-    graphics::{Color,  RenderTarget, RenderWindow
-    },
-};
+use sfml::graphics::{Color, RenderTarget, RenderWindow};
 
 pub struct Map {
-    win: RenderWindow,
+    win: RenderWindow, // SFML Window
     pub field: Vec<Vec<Place>>,
 }
 
@@ -49,9 +46,8 @@ impl Map {
         ]
     }
 
-    pub fn get_block_allignments_y(&mut self) -> Option<Vec<usize>> {
+    pub fn get_block_allignments(&mut self) -> Option<Vec<usize>> {
         let mut allignments: Vec<usize> = vec![];
-
         let mut blocks_count_per_row = [0; config::MAP_HEIGHT];
 
         for x in self.field.iter() {
@@ -69,20 +65,15 @@ impl Map {
         }
 
         if allignments.len() == 0 {
-            return None;
+            None
         } else {
-            return Some(allignments);
+            Some(allignments)
         }
     }
 
-    pub fn delete_row(&mut self, row: i32) {
-        self.shift_map_down(row);
-    }
-
-    fn shift_map_down(&mut self, from_y: i32) {
+    pub fn shift_map_down(&mut self, from_y: i32) {
         for x in 0..config::MAP_LENGTH {
             for y in 0..from_y {
-                println!("{} {}from", y, from_y);
                 self.shift_place_down(x, (from_y - y) as usize);
             }
         }
@@ -108,18 +99,6 @@ impl Map {
         }
     }
 
-    // pub fn set(&mut self, set: bool, x: usize, y: usize) {
-    //    self.field[x][y] = set;
-    // }
-
-    //pub fn get(&self, x: usize, y: usize) -> char {
-    //    if self.field[x][y] {
-    //        '#'
-    //    } else {
-    //        ' '
-    //     }
-    //}
-
     pub fn print_map(&mut self) {
         self.win.clear(Color::BLACK);
         for row in self.field.iter() {
@@ -129,10 +108,7 @@ impl Map {
         }
         self.win.display();
     }
-}
 
-// getters / setters
-impl Map {
     pub fn set_block(&mut self, x: usize, y: usize, block_id: usize, col: Color) {
         self.field[x][y].set_block(Some(block_id), col);
     }

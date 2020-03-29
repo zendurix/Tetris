@@ -1,6 +1,6 @@
 use crate::config;
 
-use sfml::graphics::{Color, RectangleShape,  Shape, Transformable};
+use sfml::graphics::{Color, RectangleShape, Shape, Transformable};
 use sfml::system::Vector2f;
 
 pub struct Coord {
@@ -26,7 +26,7 @@ impl std::cmp::PartialEq for Coord {
 }
 
 pub struct Place {
-    rect: RectangleShape<'static>, // TEMPORARY solution
+    rect: RectangleShape<'static>,
     block_id: Option<usize>,
     pub coord: Coord,
     color: Color,
@@ -65,7 +65,6 @@ impl Place {
     }
 }
 
-// place doesn't hold any complicated data, so it is safe to copy
 impl Clone for Place {
     fn clone(&self) -> Place {
         Place {

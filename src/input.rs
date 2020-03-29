@@ -2,46 +2,42 @@ use sfml::window::Key;
 use std::sync::mpsc::{Receiver, Sender};
 
 pub struct Input {
-    current_input: Option<char>,
+    current_input: char,
 }
 
 impl Input {
     pub fn new() -> Input {
-        Input {
-            current_input: None,
-        }
+        Input { current_input: ' ' }
     }
 
     fn get_keyboard_input(&mut self) {
-        let inp: char;
         loop {
             if Key::Left.is_pressed() {
-                inp = '4';
+                self.current_input = '4';
                 break;
             } else if Key::Right.is_pressed() {
-                inp = '6';
+                self.current_input = '6';
                 break;
             } else if Key::Down.is_pressed() {
-                inp = '2';
+                self.current_input = '2';
                 break;
             } else if Key::Space.is_pressed() {
-                inp = ' ';
+                self.current_input = ' ';
                 break;
             } else if Key::Escape.is_pressed() {
-                inp = '\n';
+                self.current_input = '\n';
                 break;
             }
         }
-        if inp == '\0' {
-            self.current_input = None;
-        } else {
-            self.current_input = Some(inp);
-        }
     }
 
+    // if game sends read(false) than listener will be chcecking for input.
+    // if input is given it sends it to game, and blocks input checking
+    // until sended input is read by the game (game sends read(true))
+    // if game sends game_off(true) loop will terminate
     pub fn input_listener_activate(
         &mut self,
-        input_tx: Sender<Option<char>>,
+        input_tx: Sender<char>,
         input_read_rx: Receiver<bool>,
         game_off_rx: Receiver<bool>,
     ) {
@@ -51,14 +47,13 @@ impl Input {
                 Ok(read) => {
                     if read && !sended {
                         self.get_keyboard_input();
-                        println!("char sended {:?}", self.current_input);
                         input_tx.send(self.current_input).unwrap();
                         sended = true;
                     } else if !read {
                         sended = false;
                     }
                 }
-                _ => (), // do nothing
+                _ => (),
             }
             match game_off_rx.try_recv() {
                 Ok(off) => {
@@ -66,23 +61,8 @@ impl Input {
                         break 'listener_loop;
                     }
                 }
-                _ => (), // do nothing
+                _ => (),
             }
         }
     }
 }
-
-/*
-
-
-
-let mut input_map: HashMap<char, bool> = HashMap::new();
-input_map.insert('2', false);
-input_map.insert('4', false);
-input_map.insert('6', false);
-input_map.insert(' ', false);
-input_map.insert('\n', false);
-
-
-
-*/
