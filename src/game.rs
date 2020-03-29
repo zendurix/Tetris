@@ -223,13 +223,6 @@ impl Game {
     }
 
     fn check_overbounding(&mut self, coords: &[Coord; 4], block_id: usize) -> CollisionEffect {
-        let mut y_is_0 = false;
-        for coord in coords {
-            if coord.y == 0 {
-                y_is_0 = true;
-            }
-        }
-
         for coord in coords {
             if coord.y as usize == config::MAP_HEIGHT - 1 {
                 return CollisionEffect::Stop;
@@ -246,10 +239,6 @@ impl Game {
                     if id == block_id {
                         ();
                     } else {
-                        if y_is_0 {
-                            self.game_off = true;
-                            println!("GAME OVER");
-                        }
                         if self.is_collision_under_block() {
                             return CollisionEffect::Stop;
                         } else {
@@ -296,10 +285,25 @@ impl Game {
         let color = Game::random_color();
 
         let new_block = Block::new(color, block_type, start_x);
+        self.check_game_over(&new_block.get_blocks_coords());
+
         self.blocks.push(new_block);
         self.place_block_on_map(self.next_block_id);
         self.moving_block_id = Some(self.next_block_id as usize);
         self.next_block_id += 1;
+    }
+
+    fn check_game_over(&mut self, coords: &[Coord; 4]){
+        for coord in coords.iter() {
+            match self.map.field[coord.x as usize][coord.y as usize].get_block_id() {
+                Some(_id) => {                    
+                    self.game_off = true;
+                    println!("GAME OVER");
+                    break;
+                }
+                None => (),
+            }
+        }
     }
 
     fn unplace_block_from_map(&mut self, block_index: usize) {
