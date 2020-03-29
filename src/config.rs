@@ -8,4 +8,4 @@ pub const WIN_HEIGHT: usize = (MAP_HEIGHT - 1) * BLOCK_SIZE;
 pub const WIN_LENGTH: usize = (MAP_LENGTH - 1) * BLOCK_SIZE;
 
 pub const TURN_TIME_NS: u32 = 100000000;
-pub const FALL_TIME_MS: u64 = 2000;
+pub const FALL_TIME_MS: u64 = 500;

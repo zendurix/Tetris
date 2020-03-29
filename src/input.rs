@@ -43,6 +43,14 @@ impl Input {
     ) {
         let mut sended = false;
         'listener_loop: loop {
+            match game_off_rx.try_recv() {
+                Ok(off) => {
+                    if off {
+                        break 'listener_loop;
+                    }
+                }
+                _ => (),
+            }
             match input_read_rx.recv() {
                 Ok(read) => {
                     if read && !sended {
@@ -51,14 +59,6 @@ impl Input {
                         sended = true;
                     } else if !read {
                         sended = false;
-                    }
-                }
-                _ => (),
-            }
-            match game_off_rx.try_recv() {
-                Ok(off) => {
-                    if off {
-                        break 'listener_loop;
                     }
                 }
                 _ => (),

@@ -33,6 +33,7 @@ pub struct Game {
     moving_block_id: Option<usize>,
     next_block_id: usize,
     points: u32,
+    game_off: bool,
 }
 
 impl Game {
@@ -43,6 +44,7 @@ impl Game {
             moving_block_id: None,
             next_block_id: 0,
             points: 0,
+            game_off: false,
         }
     }
 
@@ -79,8 +81,7 @@ impl Game {
             match input_received {
                 Some(inp) => {
                     if inp == '\n' {
-                        game_off_tx.send(true).unwrap();
-                        break 'game_loop;
+                        self.game_off = true;
                     } else {
                         self.handle_input(input_received);
                         input_read_tx.send(true).unwrap();
@@ -94,6 +95,11 @@ impl Game {
                 time_counter = Instant::now();
             }
             self.check_allignments();
+
+            if self.game_off {
+                game_off_tx.send(true).unwrap();
+                break 'game_loop;
+            }
         }
 
         println!("GAME LOOP ENDED");
@@ -210,7 +216,13 @@ impl Game {
         }
     }
 
-    fn check_overbounding(&self, coords: &[Coord; 4], block_id: usize) -> CollisionEffect {
+    fn check_overbounding(&mut self, coords: &[Coord; 4], block_id: usize) -> CollisionEffect {
+        let mut y_is_0 = false;
+        for coord in coords {
+            if coord.y == 0 {
+                y_is_0 = true;
+            }
+        }
         for coord in coords {
             match self.map.field[coord.x as usize][coord.y as usize].get_block_id() {
                 None => (),
@@ -218,6 +230,10 @@ impl Game {
                     if id == block_id {
                         ();
                     } else {
+                        if y_is_0 {
+                            self.game_off = true;
+                            println!("GAME OVER");
+                        }
                         return CollisionEffect::Stop;
                     }
                 }

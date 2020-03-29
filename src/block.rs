@@ -135,7 +135,6 @@ impl Block {
 
         if squares_y.len() < 3 && min_y != 0 {
             min_y -= 1;
-            println!("aaa");
         }
 
         Coord::new(min_x, min_y)
