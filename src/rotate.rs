@@ -3,7 +3,6 @@ use crate::place::Place;
 
 pub fn rotate_block(mut area: [[Place; 3]; 3], block_id: usize) -> [Coord; 4] {
     let mut rotated_area = area.clone();
-
     let x_l = 2;
     let y_l = 2;
 

@@ -7,7 +7,7 @@ use rand::{
 };
 use sfml::graphics::Color;
 
-#[derive(Clone, Copy, std::fmt::Debug)]
+#[derive(Clone, Copy)]
 pub enum BlockType {
     // block are tetronimos. names are taken from https://tetris.wiki/Tetromino
     I, // ####
@@ -52,18 +52,6 @@ pub enum MoveDir {
     Left,
     Right,
 }
-
-/*  MDELETE
-// derive for comparison
-#[derive(PartialEq, Eq)]
-pub enum RotateState {
-    Up = 1,
-    Right = 2,
-    Down = 3,
-    Left = 4,
-}
-
-*/
 
 pub struct Block {
     squares: [Coord; 4], // positions for 4 blocks within Block
