@@ -109,6 +109,10 @@ impl Map {
         self.win.display();
     }
 
+    pub fn close_window(&mut self) {
+        self.win.close();
+    }
+
     pub fn set_block(&mut self, x: usize, y: usize, block_id: usize, col: Color) {
         self.field[x][y].set_block(Some(block_id), col);
     }

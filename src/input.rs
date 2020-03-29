@@ -3,15 +3,21 @@ use std::sync::mpsc::{Receiver, Sender};
 
 pub struct Input {
     current_input: char,
+    game_off: bool,
+    game_off_rx: Receiver<bool>,
 }
 
 impl Input {
-    pub fn new() -> Input {
-        Input { current_input: ' ' }
+    pub fn new(game_off_rx: Receiver<bool>) -> Input {
+        Input {
+            current_input: ' ',
+            game_off: false,
+            game_off_rx,
+        }
     }
 
     fn get_keyboard_input(&mut self) {
-        loop {
+        while !self.game_off {
             if Key::Left.is_pressed() {
                 self.current_input = '4';
                 break;
@@ -28,6 +34,7 @@ impl Input {
                 self.current_input = '\n';
                 break;
             }
+            self.check_for_game_off();
         }
     }
 
@@ -39,26 +46,14 @@ impl Input {
         &mut self,
         input_tx: Sender<char>,
         input_read_rx: Receiver<bool>,
-        game_off_rx: Receiver<bool>,
     ) {
         let mut sended = false;
-        'listener_loop: loop {
-            match game_off_rx.try_recv() {
-                Ok(off) => {
-                    if off {
-                        break 'listener_loop;
-                    }
-                }
-                _ => (),
-            }
+        while !self.game_off {
             match input_read_rx.recv() {
                 Ok(read) => {
                     if read && !sended {
                         self.get_keyboard_input();
                         input_tx.send(self.current_input).unwrap();
-                        if self.current_input == '\n' {
-                            break 'listener_loop;
-                        }
                         sended = true;
                     } else if !read {
                         sended = false;
@@ -66,6 +61,18 @@ impl Input {
                 }
                 _ => (),
             }
+            self.check_for_game_off();
+        }
+    }
+
+    fn check_for_game_off(&mut self) {
+        match self.game_off_rx.try_recv() {
+            Ok(off) => {
+                if off {
+                    self.game_off = true;
+                }
+            }
+            _ => (),
         }
     }
 }

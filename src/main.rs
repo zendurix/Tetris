@@ -14,6 +14,7 @@ use sfml::{
     graphics::RenderWindow,
     window::{ContextSettings, Style},
 };
+use std::io::{stdin, Read};
 
 fn main() {
     let context_settings = ContextSettings {
@@ -30,4 +31,7 @@ fn main() {
     let mut game = Game::new(window);
 
     game.game_loop();
+
+    println!("press enter to exit");
+    stdin().read(&mut [0u8]).unwrap();
 }

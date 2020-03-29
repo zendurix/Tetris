@@ -7,7 +7,7 @@ use rand::{
 };
 use sfml::graphics::Color;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, std::fmt::Debug)]
 pub enum BlockType {
     // block are tetronimos. names are taken from https://tetris.wiki/Tetromino
     I, // ####
@@ -35,7 +35,7 @@ pub enum BlockType {
 impl Distribution<BlockType> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> BlockType {
         match rng.gen_range(0, 7) {
-            //0 => BlockType::I,
+            0 => BlockType::I,
             1 => BlockType::O,
             2 => BlockType::T,
             3 => BlockType::S,
@@ -272,31 +272,6 @@ impl Block {
         ]
     }
 }
-
-/*
-    fn rotate_I(blocks: &[Coord; 4], rotate_state: &RotateState) -> [Coord; 4] {
-        if let RotateState::left | RotateState::right = rotate_state {
-            return [
-                Coord{x: blocks[0].x + 2, y: blocks[0].y - 2},
-                Coord{x: blocks[0].x + 2, y: blocks[0].y - 1},
-                Coord{x: blocks[0].x + 2, y: blocks[0].y - 0},
-                Coord{x: blocks[0].x + 2, y: blocks[0].y + 1}
-            ];
-        }
-        else { // lup || down
-            return [
-                Coord{x: blocks[0].x - 2, y: blocks[0].y + 2},
-                Coord{x: blocks[0].x - 1, y: blocks[0].y + 2},
-                Coord{x: blocks[0].x    , y: blocks[0].y + 2},
-                Coord{x: blocks[0].x + 1, y: blocks[0].y + 2}
-            ];
-        }
-    }
-
-    fn rotate_O(blocks: &[Coord; 4], rotate_state: &RotateState) -> [Coord; 4] {
-        *blocks   // square can't rotate
-    }
-*/
 
 // setters / getters
 impl Block {

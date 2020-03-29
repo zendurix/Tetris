@@ -53,21 +53,21 @@ impl Game {
         let (game_off_tx, game_off_rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
         let (input_read_tx, input_read_rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 
-        let mut input_system = Input::new();
-        let input_thread = thread::spawn(move || {
-            input_system.input_listener_activate(input_tx, input_read_rx, game_off_rx)
-        });
+        let mut input_system = Input::new(game_off_rx);
+        let input_thread =
+            thread::spawn(move || input_system.input_listener_activate(input_tx, input_read_rx));
 
         // send read(true) to input system, so it will start chcecking input
         input_read_tx.send(true).unwrap();
 
         let mut time_counter = Instant::now();
         let fall_down_time = Duration::from_millis(config::FALL_TIME_MS);
-        let mut input_received: Option<char>;
+        let mut input_received: Option<char> = None;
 
-        'game_loop: loop {
+        while !self.game_off {
             if self.moving_block_id == None {
                 self.spawn_random_block();
+                self.map.print_map();
             }
 
             input_received = match input_rx.try_recv() {
@@ -82,6 +82,7 @@ impl Game {
                 Some(inp) => {
                     if inp == '\n' {
                         self.game_off = true;
+                        game_off_tx.send(true).unwrap();
                     } else {
                         self.handle_input(input_received);
                         input_read_tx.send(true).unwrap();
@@ -95,23 +96,21 @@ impl Game {
                 time_counter = Instant::now();
             }
             self.check_allignments();
-
-            if self.game_off {
-                game_off_tx.send(true).unwrap();
-                match input_thread.join() {
-                    Ok(_) => {
-                        println!("thread closed correctly");
-                    }
-                    Err(_) => {
-                        println!("thread closing error");
-                    }
-                };
-                break 'game_loop;
-            }
         }
-
+        if input_received != Some('\n') {
+            game_off_tx.send(true).unwrap();
+        }
         println!("GAME LOOP ENDED");
+        match input_thread.join() {
+            Ok(_) => {
+                println!("thread closed correctly");
+            }
+            Err(_) => {
+                println!("thread closing error");
+            }
+        };
         println!("POINTS: {}", self.points);
+        self.map.close_window();
     }
 
     fn handle_input(&mut self, input: Option<char>) {
@@ -158,11 +157,18 @@ impl Game {
                 if let BlockType::O = self.blocks[id].get_block_type() {
                     ();
                 } else {
-                    let area_coord = self.blocks[id].get_block_min_xy();
-                    let area = self
-                        .map
-                        .get_3x3_clone(area_coord.x as usize, area_coord.y as usize);
-                    let rotation_coords = rotate::rotate_block(area, id);
+                    let rotation_coords;
+                    if let BlockType::I = self.blocks[id].get_block_type() {
+                        rotation_coords =
+                            rotate::rotate_i_block(&self.blocks[id].get_blocks_coords());
+                    } else {
+                        let area_coord = self.blocks[id].get_block_min_xy();
+                        let area = self
+                            .map
+                            .get_3x3_clone(area_coord.x as usize, area_coord.y as usize);
+
+                        rotation_coords = rotate::rotate_block(area, id);
+                    }
                     match self.check_overbounding(&rotation_coords, id) {
                         CollisionEffect::None => {
                             self.unplace_block_from_map(id);
@@ -223,6 +229,16 @@ impl Game {
                 y_is_0 = true;
             }
         }
+
+        for coord in coords {
+            if coord.y as usize == config::MAP_HEIGHT - 1 {
+                return CollisionEffect::Stop;
+            }
+            if coord.x < 0 || coord.x >= config::MAP_LENGTH as i32 - 1 || coord.y < 0 {
+                return CollisionEffect::DontMove;
+            }
+        }
+
         for coord in coords {
             match self.map.field[coord.x as usize][coord.y as usize].get_block_id() {
                 None => (),
@@ -234,22 +250,31 @@ impl Game {
                             self.game_off = true;
                             println!("GAME OVER");
                         }
-                        return CollisionEffect::Stop;
+                        if self.is_collision_under_block() {
+                            return CollisionEffect::Stop;
+                        } else {
+                            return CollisionEffect::DontMove;
+                        }
                     }
                 }
             }
         }
+        CollisionEffect::None
+    }
 
-        for coord in coords {
-            if coord.y as usize == config::MAP_HEIGHT - 1 {
-                return CollisionEffect::Stop;
-            }
-            if coord.x as usize == config::MAP_LENGTH - 1 {
-                return CollisionEffect::DontMove;
+    pub fn is_collision_under_block(&mut self) -> bool {
+        let coords = self.blocks[self.moving_block_id.unwrap()].get_blocks_coords();
+        for coord in coords.iter() {
+            match self.map.field[coord.x as usize][coord.y as usize + 1].get_block_id() {
+                None => (),
+                Some(id) => {
+                    if id != self.moving_block_id.unwrap() {
+                        return true;
+                    }
+                }
             }
         }
-
-        CollisionEffect::None
+        false
     }
 
     fn check_allignments(&mut self) {
