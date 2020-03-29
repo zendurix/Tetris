@@ -1,8 +1,7 @@
 TETRIS
 
-For display this game uses SFML bindings taken from https://github.com/jeremyletang/rust-sfml
-
-To build this project follow instructions on jeremyletang repository
+For display this game uses SFML bindings taken from https://github.com/jeremyletang/rust-sfml 
+Follow this instructions to get this working with Rust https://github.com/jeremyletang/rust-sfml/wiki/Windows 
 
 Movement
 
