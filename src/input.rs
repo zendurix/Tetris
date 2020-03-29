@@ -56,6 +56,9 @@ impl Input {
                     if read && !sended {
                         self.get_keyboard_input();
                         input_tx.send(self.current_input).unwrap();
+                        if self.current_input == '\n' {
+                            break 'listener_loop;
+                        }
                         sended = true;
                     } else if !read {
                         sended = false;

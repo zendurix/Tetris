@@ -98,20 +98,20 @@ impl Game {
 
             if self.game_off {
                 game_off_tx.send(true).unwrap();
+                match input_thread.join() {
+                    Ok(_) => {
+                        println!("thread closed correctly");
+                    }
+                    Err(_) => {
+                        println!("thread closing error");
+                    }
+                };
                 break 'game_loop;
             }
         }
 
         println!("GAME LOOP ENDED");
         println!("POINTS: {}", self.points);
-        match input_thread.join() {
-            Ok(_) => {
-                println!("thread closed correctly");
-            }
-            Err(_) => {
-                println!("thread closing error");
-            }
-        };
     }
 
     fn handle_input(&mut self, input: Option<char>) {
