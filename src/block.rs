@@ -55,7 +55,7 @@ pub enum MoveDir {
 
 pub struct Block {
     squares: [Coord; 4], // positions for 4 blocks within Block
-    color: Color,        //RGB color
+    color: Color,        //RGB color from SFML
     block_type: BlockType,
 }
 
@@ -72,6 +72,7 @@ impl Block {
             color,
         }
     }
+
 
     pub fn try_move(&self, dir: &MoveDir) -> [Coord; 4] {
         let mut coords = [
@@ -105,7 +106,8 @@ impl Block {
         coords
     }
 
-    pub fn get_block_min_xy(&self) -> Coord {
+    // get starting point for 3x3 area with block inside
+    pub fn get_3x3_start_point(&self) -> Coord {
         let mut min_x = 100;
         let mut min_y = 100;
         let mut squares_y: Vec<i32> = vec![];

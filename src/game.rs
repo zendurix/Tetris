@@ -162,7 +162,7 @@ impl Game {
                         rotation_coords =
                             rotate::rotate_i_block(&self.blocks[id].get_blocks_coords());
                     } else {
-                        let area_coord = self.blocks[id].get_block_min_xy();
+                        let area_coord = self.blocks[id].get_3x3_start_point();
                         let area = self
                             .map
                             .get_3x3_clone(area_coord.x as usize, area_coord.y as usize);
